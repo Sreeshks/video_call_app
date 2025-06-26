@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "685721730848",
+    "project_id": "videoagora-ca338",
+    "storage_bucket": "videoagora-ca338.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:685721730848:android:473b17d4d9fbd8e4b8e145",
+        "android_client_info": {
+          "package_name": "com.example.chatapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAm8ka7AUUI_hiauERxJP47WAjaA2zPbzI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
