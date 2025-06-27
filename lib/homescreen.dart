@@ -1,51 +1,44 @@
-import 'dart:convert';
-
 import 'package:chatapp/videocall_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_callkit_incoming/entities/android_params.dart';
-import 'package:flutter_callkit_incoming/entities/call_event.dart';
-import 'package:flutter_callkit_incoming/entities/call_kit_params.dart';
-import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-
-Future<void> showCallkitIncoming(Map<String, dynamic> data) async {
-  final params = CallKitParams(
-    id: data['channelName'] as String,
-    nameCaller: data['callerId'] as String,
-    appName: 'Video Call App',
-    avatar: '',
-    handle: data['channelName'] as String,
-    type: 1, // Video call
-    duration: 30000,
-    textAccept: 'Accept',
-    textDecline: 'Decline',
-    extra: data,
-    android: AndroidParams(
-      isCustomNotification: true,
-      ringtonePath: 'system_ringtone_default',
-      backgroundColor: '#0955fa',
-      actionColor: '#4CAF50',
-    ),
-  );
-  await FlutterCallkitIncoming.showCallkitIncoming(params);
-}
 
 class HomeScreen extends StatefulWidget {
-  final String currentUserId;
-
-  const HomeScreen({super.key, required this.currentUserId});
-
+  const HomeScreen({Key? key}) : super(key: key);
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String? _otherUserId;
-  String? _fcmToken;
+  final TextEditingController _channelController = TextEditingController();
+  final TextEditingController _userIdController = TextEditingController();
+
+  @override
+  void dispose() {
+    _channelController.dispose();
+    _userIdController.dispose();
+    super.dispose();
+  }
+
+  void _joinCall() {
+    if (_channelController.text.isNotEmpty && _userIdController.text.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoCallScreen(
+            channelName: _channelController.text,
+            userId: int.parse(_userIdController.text),
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter both channel name and user ID'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +50,20 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+             
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.blue.withOpacity(0.2),
+                ),
+                child: const Icon(
+                  Icons.video_call,
+                  size: 80,
+                  color: Colors.blue,
+                ),
+              ),
+              const SizedBox(height: 30),
               const Text(
                 'Video Call App',
                 style: TextStyle(
@@ -66,23 +73,133 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              Text(
-                'Logged in as ${widget.currentUserId}',
-                style: const TextStyle(
+              const Text(
+                'Connect with friends and family',
+                style: TextStyle(
                   fontSize: 16,
                   color: Colors.grey,
                 ),
               ),
               const SizedBox(height: 50),
-              if (_otherUserId != null)
-                ListTile(
-                  leading: const Icon(Icons.person, color: Colors.blue, size: 40),
-                  title: Text(
-                    _otherUserId!,
-                    style: const TextStyle(color: Colors.white, fontSize: 20),
-                  ),
-                  onTap: _initiateCall,
+              
+              
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(15),
                 ),
+                child: TextField(
+                  controller: _channelController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    hintText: 'Enter Channel Name',
+                    hintStyle: TextStyle(color: Colors.grey),
+                    prefixIcon: Icon(Icons.meeting_room, color: Colors.blue),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: TextField(
+                  controller: _userIdController,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    hintText: 'Enter User ID (numbers only)',
+                    hintStyle: TextStyle(color: Colors.grey),
+                    prefixIcon: Icon(Icons.person, color: Colors.blue),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 40),
+              
+             
+              Container(
+                width: double.infinity,
+                height: 56,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Colors.blue, Colors.blueAccent],
+                  ),
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: ElevatedButton(
+                  onPressed: _joinCall,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.video_call, size: 24),
+                      SizedBox(width: 10),
+                      Text(
+                        'Join Video Call',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 30),
+              
+             
+              const Text(
+                'Quick Join Options',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 15),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildQuickJoinButton(
+                      'Test Room',
+                      () {
+                        _channelController.text = 'test';
+                        _userIdController.text = '123';
+                        _joinCall();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: _buildQuickJoinButton(
+                      'Demo Call',
+                      () {
+                        _channelController.text = 'demo';
+                        _userIdController.text = '456';
+                        _joinCall();
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -90,106 +207,28 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _initializeFCM();
-    _setOtherUser();
-    _listenForCallEvents();
-  }
-
- Future<void> _initializeFCM() async {
-    final prefs = await SharedPreferences.getInstance();
-    _fcmToken = await FirebaseMessaging.instance.getToken();
-    await prefs.setString('fcmToken', _fcmToken!);
-    // Save FCM token to Firestore
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.currentUserId)
-        .set({'fcmToken': _fcmToken}, SetOptions(merge: true));
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      if (message.data['type'] == 'call') {
-        showCallkitIncoming(message.data);
-      }
-    });
-  }
-
-  Future<void> _initiateCall() async {
-    final channelName = '${widget.currentUserId}_${_otherUserId}_${DateTime.now().millisecondsSinceEpoch}';
-    await FirebaseFirestore.instance.collection('calls').doc(channelName).set({
-      'caller': widget.currentUserId,
-      'receiver': _otherUserId,
-      'status': 'Calling',
-      'timestamp': DateTime.now(),
-    });
-
-    final prefs = await SharedPreferences.getInstance();
-    final otherFcmToken = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(_otherUserId)
-        .get()
-        .then((doc) => doc.data()?['fcmToken']);
-
-    if (otherFcmToken != null) {
-      await http.post(
-        Uri.parse('https://your-fcm-server/send'), // Replace with your server URL
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'to': otherFcmToken,
-          'data': {
-            'type': 'call',
-            'callerId': widget.currentUserId,
-            'channelName': channelName,
-          },
-        }),
-      );
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => VideoCallScreen(
-          channelName: channelName,
-          userId: widget.currentUserId == 'UserA' ? 1 : 2,
+  Widget _buildQuickJoinButton(String text, VoidCallback onPressed) {
+    return Container(
+      height: 45,
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.blue.withOpacity(0.5)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: Colors.blue,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ),
     );
-  }
-
-  Future<void> _listenForCallEvents() async {
-    FlutterCallkitIncoming.onEvent.listen((CallEvent? event) async {
-      if (event == null) return;
-
-      // Use string constants for event types
-      switch (event.event) {
-        case 'CALL_ACCEPT':
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => VideoCallScreen(
-                channelName: event.body['channelName'] as String,
-                userId: widget.currentUserId == 'UserA' ? 1 : 2,
-              ),
-            ),
-          );
-          await FirebaseFirestore.instance
-              .collection('calls')
-              .doc(event.body['channelName'] as String)
-              .update({'status': 'Connected'});
-          break;
-        case 'CALL_DECLINE':
-          await FirebaseFirestore.instance
-              .collection('calls')
-              .doc(event.body['channelName'] as String)
-              .update({'status': 'Ended'});
-          break;
-        default:
-          break;
-      }
-    });
-  }
-
-  void _setOtherUser() {
-    _otherUserId = widget.currentUserId == 'UserA' ? 'UserB' : 'UserA';
   }
 }

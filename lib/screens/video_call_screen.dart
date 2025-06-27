@@ -1,17 +1,18 @@
-import 'package:chatapp/agora_config.dart';
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
-
+import '../config/agora_config.dart';
 
 class VideoCallScreen extends StatefulWidget {
   final String channelName;
   final int userId;
+  final bool isIncomingCall;
 
   const VideoCallScreen({
     Key? key,
     required this.channelName,
     required this.userId,
+    this.isIncomingCall = false,
   }) : super(key: key);
 
   @override
@@ -26,6 +27,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   bool _videoDisabled = false;
   bool _speakerEnabled = true;
   bool _isCallConnected = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -34,51 +36,118 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   }
 
   Future<void> initAgora() async {
-  
-    await [Permission.microphone, Permission.camera].request();
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.microphone,
+      Permission.camera,
+    ].request();
 
-    
-    _engine = createAgoraRtcEngine();
-    await _engine.initialize(const RtcEngineContext(
-      appId: AgoraConfig.appId,
-      channelProfile: ChannelProfileType.channelProfileCommunication,
-    ));
+    if (statuses[Permission.microphone]!.isDenied ||
+        statuses[Permission.camera]!.isDenied) {
+      setState(() {
+        _errorMessage = 'Camera or microphone permission denied';
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please grant camera and microphone permissions'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
-    _engine.registerEventHandler(
-      RtcEngineEventHandler(
-        onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-          setState(() {
-            _localUserJoined = true;
-            _isCallConnected = true;
-          });
-        },
-        onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-          setState(() {
-            _remoteUid = remoteUid;
-          });
-        },
-        onUserOffline: (RtcConnection connection, int remoteUid,
-            UserOfflineReasonType reason) {
-          setState(() {
-            _remoteUid = null;
-          });
-        },
-        onTokenPrivilegeWillExpire: (RtcConnection connection, String token) {
-          debugPrint('Token will expire');
-        },
-      ),
-    );
+    try {
+      _engine = createAgoraRtcEngine();
+      await _engine.initialize(const RtcEngineContext(
+        appId: AgoraConfig.appId,
+        channelProfile: ChannelProfileType.channelProfileCommunication,
+      ));
 
-    await _engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
-    await _engine.enableVideo();
-    await _engine.startPreview();
+      _engine.registerEventHandler(
+        RtcEngineEventHandler(
+          onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+            debugPrint('Joined channel: ${connection.channelId}, uid: ${connection.localUid}');
+            setState(() {
+              _localUserJoined = true;
+              _isCallConnected = true;
+              _errorMessage = null;
+            });
+          },
+          onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+            debugPrint('User joined: $remoteUid');
+            setState(() {
+              _remoteUid = remoteUid;
+            });
+          },
+          onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
+            debugPrint('User offline: $remoteUid, reason: $reason');
+            setState(() {
+              _remoteUid = null;
+            });
+          },
+          onTokenPrivilegeWillExpire: (RtcConnection connection, String token) async {
+            debugPrint('Token will expire for channel: ${connection.channelId}');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Token is about to expire. Please reconnect.'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            }
+          },
+          onError: (ErrorCodeType err, String msg) {
+            debugPrint('Agora Error: $err, Message: $msg');
+            setState(() {
+              _errorMessage = 'Connection failed: $msg (Error code: $err)';
+            });
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Connection failed: $msg (Error code: $err)'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          },
+        ),
+      );
 
-    await _engine.joinChannel(
-      token: AgoraConfig.token!,
-      channelId: widget.channelName,
-      uid: widget.userId,
-      options: const ChannelMediaOptions(),
-    );
+      await _engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+      await _engine.enableVideo();
+      await _engine.startPreview();
+
+      debugPrint('Joining channel: ${widget.channelName}, uid: ${widget.userId}');
+      await _engine.joinChannel(
+        token: AgoraConfig.token,
+        channelId: widget.channelName,
+        uid: widget.userId,
+        options: const ChannelMediaOptions(),
+      );
+
+      if (widget.isIncomingCall && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Incoming call: ${widget.channelName}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Agora initialization failed: $e');
+      setState(() {
+        _errorMessage = 'Initialization failed: $e';
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Initialization failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -88,8 +157,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   }
 
   Future<void> _dispose() async {
-    await _engine.leaveChannel();
-    await _engine.release();
+    try {
+      await _engine.leaveChannel();
+      await _engine.release();
+    } catch (e) {
+      debugPrint('Error disposing Agora engine: $e');
+    }
   }
 
   void _onToggleMute() {
@@ -111,14 +184,16 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   }
 
   void _onToggleSpeaker() {
-    setState(() {
+   setState(() {
       _speakerEnabled = !_speakerEnabled;
-    });
+   });
     _engine.setEnableSpeakerphone(_speakerEnabled);
   }
 
   void _onCallEnd() {
-    Navigator.of(context).pop();
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -127,25 +202,23 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-        
           _remoteVideo(),
-       
           Positioned(
             top: 60,
             right: 20,
             child: _localVideoPreview(),
           ),
-         
           _buildTopBar(),
-         
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: _buildBottomControls(),
           ),
-         
-          if (!_isCallConnected) _buildConnectingOverlay(),
+          if (!_isCallConnected && _errorMessage != null)
+            _buildErrorOverlay(),
+          if (!_isCallConnected && _errorMessage == null)
+            _buildConnectingOverlay(),
         ],
       ),
     );
@@ -412,6 +485,47 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 18,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorOverlay() {
+    return Container(
+      color: Colors.black.withOpacity(0.7),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error,
+              color: Colors.red,
+              size: 50,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              _errorMessage ?? 'Unknown error occurred',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _onCallEnd,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'Return',
+                style: TextStyle(color: Colors.white),
               ),
             ),
           ],
