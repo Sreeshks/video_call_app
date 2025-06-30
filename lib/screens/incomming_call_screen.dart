@@ -1,6 +1,5 @@
-import 'package:chatapp/screens/video_call_screen.dart';
 import 'package:flutter/material.dart';
-
+import 'package:vcapp/screens/video_call_screen.dart';
 
 class IncomingCallScreen extends StatelessWidget {
   final String channelName;
