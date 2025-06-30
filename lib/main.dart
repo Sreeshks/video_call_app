@@ -1,12 +1,12 @@
+import 'package:chatapp/screens/auth_screen.dart';
+import 'package:chatapp/screens/home_screen.dart';
+import 'package:chatapp/screens/incomming_call_screen.dart';
+import 'package:chatapp/services/notification_services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:vcapp/screens/auth_screen.dart';
-import 'package:vcapp/screens/home_screen.dart';
-import 'package:vcapp/screens/incomming_call_screen.dart';
-import 'package:vcapp/services/notification_services.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,10 +65,11 @@ class VideoCallApp extends StatelessWidget {
 
     if (initialMessage != null && initialMessage.data['type'] == 'call') {
       if (user != null) {
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
+        final userDoc =
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .get();
         final userId = userDoc.data()?['userId'] as int?;
         if (userId != null) {
           return IncomingCallScreen(
